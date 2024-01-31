@@ -1,0 +1,9 @@
+# 项目所需的包列表
+
+# 主要依赖
+python==3.11.5
+numpy
+pandas
+loguru
+conda-forge::pythonocc-core==7.7.2
+# 可选依赖
