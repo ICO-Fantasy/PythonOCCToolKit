@@ -33,3 +33,4 @@ R=
 |0 1|
 """
 # 齐次变换采用4*4的齐次变换矩阵描述
+TransformMatrix_4x4 = Annotated[NDArray[npt.float_], Literal[4, 4]]
