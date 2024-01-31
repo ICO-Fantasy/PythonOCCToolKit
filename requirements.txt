@@ -7,3 +7,4 @@ pandas
 loguru
 conda-forge::pythonocc-core==7.7.2
 # 可选依赖
+PySide6==6.4.2

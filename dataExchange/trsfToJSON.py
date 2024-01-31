@@ -3,7 +3,7 @@ import json
 from OCC.Core.gp import gp_Trsf
 
 
-def trsfToJSON(trsf: gp_Trsf):
+def trsf2json(trsf: gp_Trsf):
     """
     Return
     ------
@@ -24,14 +24,4 @@ def trsfToJSON(trsf: gp_Trsf):
     shape = trsf.Form()
     scale = trsf.ScaleFactor()
     data = {"Location": location, "Matrix": r_matrix, "shape": shape, "scale": scale}
-    # print(1111)
-    # print(f'"Location": {location}, "Matrix": {Rmatrix}, "shape": {shpae}, "scale": {scale}')
     return json.dumps(data)
-
-
-# if __name__ == "__main__":
-#     atrsf = gp_Trsf()
-#     atrsf.SetTranslationPart(gp_Vec(10, 20, 30))
-#     atrsf.SetRotationPart(gp_Quaternion(gp_Vec(0, 0, 1), 180))
-#     trsfToJSON(atrsf)
-# # end main
