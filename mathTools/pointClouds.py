@@ -3,19 +3,20 @@
 Author: ICO
 Date: 2023-09-11"""
 import numpy as np
+from geometricTyping import Point
 
 
-def center_point_of_points(points_list: list[tuple[float, float, float]]):
+def center_point_of_points(points_list: list[Point]) -> Point:
     """计算点的中心坐标
 
     Parameters
     ----------
-    `points_list` : list[tuple[float, float, float]]
+    `points_list` : list[Point]
         包含点坐标的列表，每个点表示为一个元组 (x, y, z)
 
     Returns
     -------
-    tuple[float, float, float]
+    Point
         中心点的坐标，格式为 (center_x, center_y, center_z)
     """
     # 将点的坐标拆分成单独的列表

@@ -1,3 +1,11 @@
+"""
+创建正四面体
+Author: ICO
+Date: 2024-02-04"""
+
+# logger
+from loguru import logger
+
 # pyOCC
 from OCC.Core.BRep import BRep_Builder
 from OCC.Core.BRepBuilderAPI import (
@@ -6,7 +14,7 @@ from OCC.Core.BRepBuilderAPI import (
     BRepBuilderAPI_MakeVertex,
     BRepBuilderAPI_MakeWire,
 )
-from OCC.Core.gp import gp_Pnt, gp_Vec
+from OCC.Core.gp import gp_Pnt
 from OCC.Core.TopoDS import TopoDS_Shell
 
 

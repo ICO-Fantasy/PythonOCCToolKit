@@ -1,5 +1,6 @@
 #local files
 localAnnotation.md
+localtest*.py
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

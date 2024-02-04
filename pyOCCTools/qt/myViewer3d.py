@@ -1,765 +1,566 @@
-import itertools
-import math
-import os
-import sys
-import time
-from typing import Callable
+"""
+QT & OCC 三维显示窗口
+"""
 
-import OCC
-from OCC.Core.AIS import (
-    AIS_InteractiveContext,
-    AIS_InteractiveObject,
-    AIS_Shaded,
-    AIS_Shape,
-    AIS_Shape_SelectionMode,
-    AIS_TextLabel,
-    AIS_TexturedShape,
-    AIS_WireFrame,
-)
-from OCC.Core.Aspect import Aspect_FM_NONE, Aspect_FM_STRETCH, Aspect_GFM_VER, Aspect_TOTP_RIGHT_LOWER
-from OCC.Core.BRepBuilderAPI import (
-    BRepBuilderAPI_MakeEdge,
-    BRepBuilderAPI_MakeEdge2d,
-    BRepBuilderAPI_MakeFace,
-    BRepBuilderAPI_MakeVertex,
-)
-from OCC.Core.Geom import Geom_Curve, Geom_Surface
-from OCC.Core.Geom2d import Geom2d_Curve
-from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
+from loguru import logger
+
+# local
+from myViewer3d import myViewer3d
+
+# pyOCC
+from OCC.Core.AIS import AIS_InteractiveContext, AIS_Shape, AIS_Trihedron, AIS_ViewCube
+from OCC.Core.Aspect import Aspect_GradientFillMethod, Aspect_TOTP_RIGHT_LOWER, Aspect_TypeOfTriedronPosition
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeVertex, BRepBuilderAPI_Transform
+from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox
+from OCC.Core.Geom import Geom_Axis2Placement
+from OCC.Core.gp import gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
 from OCC.Core.Graphic3d import (
+    Graphic3d_AspectLine3d,
     Graphic3d_Camera,
     Graphic3d_GraduatedTrihedron,
-    Graphic3d_MaterialAspect,
-    Graphic3d_NameOfMaterial,
-    Graphic3d_NOM_NEON_GNC,
-    Graphic3d_NOT_ENV_CLOUDS,
     Graphic3d_RenderingParams,
     Graphic3d_RM_RASTERIZATION,
-    Graphic3d_RM_RAYTRACING,
     Graphic3d_StereoMode_QuadBuffer,
-    Graphic3d_Structure,
-    Graphic3d_TextureEnv,
-    Graphic3d_TOSM_FRAGMENT,
-    Handle_Graphic3d_TextureEnv_Create,
+    Graphic3d_StructureManager,
+    Graphic3d_TransformPers,
+    Graphic3d_TransModeFlags,
+    Graphic3d_Vec2i,
 )
-from OCC.Core.Prs3d import Prs3d_Arrow, Prs3d_Drawer, Prs3d_Text, Prs3d_TextAspect
+from OCC.Core.Prs3d import Prs3d_DatumAspect, Prs3d_DatumParts, Prs3d_LineAspect
 from OCC.Core.Quantity import (
     Quantity_Color,
     Quantity_NOC_BLACK,
-    Quantity_NOC_BLUE1,
-    Quantity_NOC_CYAN1,
+    Quantity_NOC_BLUE,
     Quantity_NOC_GREEN,
-    Quantity_NOC_ORANGE,
     Quantity_NOC_RED,
     Quantity_NOC_WHITE,
-    Quantity_NOC_YELLOW,
     Quantity_TOC_RGB,
 )
-from OCC.Core.TCollection import TCollection_AsciiString, TCollection_ExtendedString
 from OCC.Core.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_ShapeEnum, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX
-from OCC.Core.V3d import (
-    V3d_AmbientLight,
-    V3d_DirectionalLight,
-    V3d_PositionalLight,
-    V3d_SpotLight,
-    V3d_TypeOfOrientation,
-    V3d_View,
-    V3d_Viewer,
-    V3d_Xneg,
-    V3d_Xpos,
-    V3d_XposYnegZpos,
-    V3d_Yneg,
-    V3d_Ypos,
-    V3d_ZBUFFER,
-    V3d_Zneg,
-    V3d_Zpos,
-)
-from OCC.Core.Visualization import Display3d
+from OCC.Core.TopExp import TopExp_Explorer
+from OCC.Core.TopLoc import TopLoc_Location
+from OCC.Core.TopoDS import topods
+from OCC.Core.V3d import V3d_TypeOfOrientation, V3d_View, V3d_ZBUFFER
+from OCC.Display.OCCViewer import Viewer3d
 
-# Shaders and Units definition must be found by occ
-# the fastest way to get done is to set the CASROOT env variable
-# it must point to the /share folder.
-"""确保 OCCT 能够找到并使用所需的着色器和单位定义，从而确保图形渲染和单位转换等功能能够正常运作"""
-if sys.platform == "win32":
-    # do the same for Units
-    if "CASROOT" in os.environ:
-        casroot_path = os.environ["CASROOT"]
-        # raise an error, force the user to correctly set the variable
-        err_msg = "Please set the CASROOT env variable (%s is not ok)" % casroot_path
-        if not os.path.isdir(casroot_path):
-            raise AssertionError(err_msg)
-    else:  # on miniconda or anaconda or whatever conda
-        occ_package_path = os.path.dirname(OCC.__file__)
-        casroot_path = os.path.join(occ_package_path, "..", "..", "..", "Library", "share", "oce")
-        # we check that all required files are at the right place
-        shaders_dict_found = os.path.isdir(os.path.join(casroot_path, "src", "Shaders"))
-        unitlexicon_found = os.path.isfile(os.path.join(casroot_path, "src", "UnitsAPI", "Lexi_Expr.dat"))
-        unitsdefinition_found = os.path.isfile(os.path.join(casroot_path, "src", "UnitsAPI", "Units.dat"))
-        if shaders_dict_found and unitlexicon_found and unitsdefinition_found:
-            os.environ["CASROOT"] = casroot_path
+# PySide6
+from PySide6 import QtGui
+from PySide6.QtCore import QRect, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QPalette
+from PySide6.QtWidgets import QApplication, QRubberBand, QStyleFactory, QWidget
+
+# local
+from ...dataExchange import to_Quantity_Color
+from ..visualization import VisualizationCONFIG, create_trihedron, create_view_cube
+from ..visualization.createViewCube import create_view_cube
+
+# 使用配置值
+X_AXIS_DIRECTION = VisualizationCONFIG.X_AXIS_DIRECTION
+Y_AXIS_DIRECTION = VisualizationCONFIG.Y_AXIS_DIRECTION
+Z_AXIS_DIRECTION = VisualizationCONFIG.Z_AXIS_DIRECTION
+X_AXIS_COLOR = VisualizationCONFIG.X_AXIS_COLOR
+Y_AXIS_COLOR = VisualizationCONFIG.Y_AXIS_COLOR
+Z_AXIS_COLOR = VisualizationCONFIG.Z_AXIS_COLOR
 
 
-# def get_color_from_name(color_name):
-#     """from the string 'WHITE', returns Quantity_Color
-#     WHITE.
-#     color_name is the color name, case insensitive.
-#     """
-#     enum_name = "Quantity_NOC_%s" % color_name.upper()
-#     if enum_name in globals():
-#         color_num = globals()[enum_name]
-#     elif enum_name + "1" in globals():
-#         color_num = globals()[enum_name + "1"]
-#         print("Many colors for color name %s, using first." % color_name)
-#     else:
-#         color_num = Quantity_NOC_WHITE
-#         print("Color name not defined. Use White by default")
-#     return Quantity_Color(color_num)
+class qtBaseViewerWidget(QWidget):
+    """The base Qt Widget for an OCC viewer"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.viewer3d = myViewer3d()
+        self.context: AIS_InteractiveContext = self.viewer3d.Context
+        self.view: V3d_View = self.viewer3d.View
+        self.viewer: V3d_View = self.viewer3d.Viewer
+        self.camera: Graphic3d_Camera = self.viewer3d.camera
+        self.structure_manager: Graphic3d_StructureManager = self.viewer3d.structure_manager
+        # self._inited = False
+
+        # 开启鼠标跟踪
+        self.setMouseTracking(True)
+        # Strong focus
+        self.setFocusPolicy(Qt.WheelFocus)
+
+        self.setAttribute(Qt.WA_NativeWindow)
+        self.setAttribute(Qt.WA_PaintOnScreen)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+
+        self.setAutoFillBackground(False)
+
+    # end alternate constructor
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.viewer3d.View.MustBeResized()
+
+    # end def
+    def paintEngine(self):
+        return None
+
+    # end def
+    # def focusInEvent(self, event):
+    #     window = self.window()
+    #     # print("Focused Window:", window.windowTitle())  # 打印窗口标题
+    #     event.accept()  # 接受焦点事件
+    # end def
 
 
-def getColor(r: int | tuple[int, int, int] | list[int], g=0, b=0):
-    try:
-        if isinstance(r, (tuple, list)):
-            r, g, b = r
-        return Quantity_Color(r / float(255), g / float(255), b / float(255), Quantity_TOC_RGB)
-    except:
-        return Quantity_NOC_RED
+# end class
+class qtViewer3dWidget(qtBaseViewerWidget):
+    # emit signal when selection is changed
+    # 选中了 AIS 对象的信号
+    signal_AISs_selected = Signal(list)
 
-
-def to_string(string):
-    return TCollection_ExtendedString(string)
-
-
-def to_asci_string(string):
-    return TCollection_AsciiString(string)
-
-
-class myViewer3d(Display3d):
-    def __init__(self):
-        Display3d.__init__(self)
-        self._parent = None  # the parent openGL GUI container
-
-        self._inited = False
-        self._local_context_opened = False
-        self.Context: AIS_InteractiveContext = self.GetContext()
-        self.Viewer: V3d_Viewer = self.GetViewer()
-        self.View: V3d_View = self.GetView()
-
-        self.default_drawer = None
-        self.structure_manager = None
-        self._is_offscreen = None
-
-        self.selected_AISs: list[AIS_InteractiveObject] = []
-        # self._select_callbacks: list[Callable] = []
-        # self._select_area_callbacks: list[Callable] = []
-        self._overlay_items = []
-
-        self._window_handle = None
-        self.camera = None
-        self.selection_modes = itertools.cycle([TopAbs_VERTEX, TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID])
-        self._current_selection_mode = TopAbs_SOLID
-
-    def get_parent(self):
-        return self._parent
-
-    def register_overlay_item(self, overlay_item):
-        self._overlay_items.append(overlay_item)
-        self.View.MustBeResized()
-        self.View.Redraw()
-
-    # def register_select_callback(self, callback:Callable):
-    #     """注册一个当 AIS 对象被选择时调用的回调函数"""
-    #     if not callable(callback):
-    #         raise AssertionError("必须输入一个可执行的函数")
-    #     # elif not self.check_func_para(callback):
-    #     #     raise AssertionError("输入的函数入参应该满足 (ais: AIS_Shape, X: float, Y: float)")
-    #     self._select_callbacks.append(callback)
-    # def register_select_area_callback(self, callback:Callable):
-    #     """注册一个区域选择时调用的回调函数"""
-    #     if not callable(callback):
-    #         raise AssertionError("必须输入一个可执行的函数")
-    #     # elif not self.check_func_para(callback):
-    #     #     raise AssertionError("输入的函数入参应该满足 (ais: AIS_Shape, X: float, Y: float)")
-    #     self._select_area_callbacks.append(callback)
-    # def unregister_callback(self, callback):
-    #     """从回调函数列表中删除输入的回调函数"""
-    #     if not callback in self._select_callbacks:
-    #         raise AssertionError("该函数未被注册")
-    #     self._select_callbacks.remove(callback)
-
-    # # 编写一个函数，检查可调用对象是否符合输入格式
-    # from typing import Callable, Type
-
-    # @staticmethod
-    # def check_func_para(a_func: Callable) -> bool:
-    #     import inspect
-
-    #     # 获取函数的签名信息
-    #     signature = inspect.signature(a_func)
-
-    #     # 定义期望的参数类型
-    #     expected_params = [
-    #         inspect.Parameter("ais", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation="OCC.Core.AIS.AIS_Shape"),
-    #         inspect.Parameter("X", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=float),
-    #         inspect.Parameter("Y", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=float),
-    #     ]
-    #     # a_a = list(signature.parameters.values())
-    #     # 检查函数的参数是否符合期望
-    #     return list(signature.parameters.values()) == expected_params
-
-    def MoveTo(self, X, Y):
-        self.Context.MoveTo(X, Y, self.View, True)
-
-    def FitAll(self):
-        self.View.ZFitAll()
-        self.View.FitAll()
-
-    def Create(
+    def __init__(
         self,
-        window_handle=None,
         parent=None,
-        create_default_lights=True,
-        draw_face_boundaries=True,
-        phong_shading=True,
-        display_glinfo=False,
+        view_trihedron=False,
+        origin_trihedron=False,
+        view_cube=True,
+        bg_color_aspect: tuple[tuple, tuple, Aspect_GradientFillMethod] = (
+            (37, 55, 113),
+            (36, 151, 132),
+            Aspect_GradientFillMethod.Aspect_GradientFillMethod_Vertical,
+        ),
+        selection_color: tuple[int, int, int] = (13, 141, 255),
+        enable_multiply_select=False,
     ):
-        self._window_handle = window_handle
-        self._parent = parent
+        super().__init__(parent)
 
-        if not self._window_handle:
-            self.InitOffscreen(3840, 2160)
-            self._is_offscreen = True
-        else:
-            self.Init(self._window_handle)
-            self._is_offscreen = False
+        self.setObjectName("qt_viewer_3d")
 
-        # display OpenGl Information
-        if display_glinfo:
-            self.GlInfo()
+        self._draw_box = []
+        self._rubber_band = None
+        self.enable_multiply_select = enable_multiply_select
+        self._view_trihedron = view_trihedron
+        self._origin_trihedron = origin_trihedron
+        self._view_cube = view_cube
+        self._bg_gradient_color = bg_color_aspect
+        self._selection_color = selection_color
+        self._zoom_area = False
+        self._select_area = False
+        self._inited = False
+        self._left_is_down = False
+        self._middle_is_down = False
+        self._right_is_down = False
+        self._selection = None
+        self._drawtext = True
+        self._qApp = QApplication.instance()
+        self._key_map = {}
+        self._shift_key_map = {}
+        self._ctrl_key_map = {}
+        self._current_cursor = "arrow"
+        self._available_cursors = {}
+        self._floor = True
 
-        if create_default_lights:
-            # 添加平行光
-            head_light = V3d_DirectionalLight()
-            head_light.SetColor(getColor(255, 255, 255))
-            head_light.SetDirection(V3d_TypeOfOrientation.V3d_Zneg)
-            # head_light.SetHeadlight(True)  # *设置灯光与相机保持一致
-            self.Viewer.AddLight(head_light)
-            # 添加环境光
-            ambient_light = V3d_AmbientLight()
-            ambient_light.SetColor(getColor(255, 255, 255))
-            self.Viewer.AddLight(ambient_light)
-            # 添加位置光
-            # position_light = V3d_PositionalLight(display.Viewer, V3d_XposYposZneg)
-            # 开启灯光
-            self.Viewer.SetLightOn()
+    # end alternate constructor
+    @property
+    def qApp(self):
+        # reference to QApplication instance
+        return self._qApp
 
-        self.camera: Graphic3d_Camera = self.View.Camera()
-        self.default_drawer: Prs3d_Drawer = self.Context.DefaultDrawer()
+    @qApp.setter
+    def qApp(self, value):
+        self._qApp = value
 
-        # draw black contour edges, like other famous CAD packages
-        # 绘制黑色轮廓边缘
-        if draw_face_boundaries:
-            self.default_drawer.SetFaceBoundaryDraw(True)
-
-        # turn up tessellation defaults, which are too conversative...
-        # 调高细分默认值
-        chord_dev = self.default_drawer.MaximalChordialDeviation() / 10.0
-        self.default_drawer.SetMaximalChordialDeviation(chord_dev)
-
-        if phong_shading:
-            # gouraud shading by default, prefer phong instead
-            # 默认使用 gouraud 着色，改用 phong 着色
-            self.View.SetShadingModel(Graphic3d_TOSM_FRAGMENT)
-
-        # necessary for text rendering
-        # 文本渲染所必需的结构管理器
-        self.structure_manager = self.Context.MainPrsMgr().StructureManager()
-
-        # turn self._inited flag to True
+    # end property
+    def InitDriver(self):
+        """初始化，并设置快捷键和光标"""
+        # print(int(self.winId()))
+        self.viewer3d.Create(window_handle=int(self.winId()), parent=self)
+        # 设置显示实体
+        self.viewer3d.SetModeShaded()
+        # 开启抗锯齿
+        self.viewer3d.enable_anti_aliasing()
         self._inited = True
-
-    def OnResize(self):
-        self.View.MustBeResized()
-
-    def ResetView(self):
-        self.View.Reset()
-
-    def Repaint(self):
-        self.Viewer.Redraw()
-
-    def SetModeWireFrame(self):
-        self.View.SetComputedMode(False)
-        self.Context.SetDisplayMode(AIS_WireFrame, True)
-
-    def SetModeShaded(self):
-        self.View.SetComputedMode(False)
-        self.Context.SetDisplayMode(AIS_Shaded, True)
-
-    def SetModeHLR(self):
-        self.View.SetComputedMode(True)
-
-    def SetOrthographicProjection(self):
-        self.camera.SetProjectionType(Graphic3d_Camera.Projection_Orthographic)
-
-    def SetPerspectiveProjection(self):
-        self.camera.SetProjectionType(Graphic3d_Camera.Projection_Perspective)
-
-    def View_Top(self):
-        self.View.SetProj(V3d_Zpos)
-
-    def View_Bottom(self):
-        self.View.SetProj(V3d_Zneg)
-
-    def View_Left(self):
-        self.View.SetProj(V3d_Xneg)
-
-    def View_Right(self):
-        self.View.SetProj(V3d_Xpos)
-
-    def View_Front(self):
-        self.View.SetProj(V3d_Yneg)
-
-    def View_Rear(self):
-        self.View.SetProj(V3d_Ypos)
-
-    def View_Iso(self):
-        self.View.SetProj(V3d_XposYnegZpos)
-
-    def EnableTextureEnv(self, name_of_texture=Graphic3d_NOT_ENV_CLOUDS):
-        # 找不到默认材质文件，不可用
-        """启用环境映射。Possible modes are
-        Graphic3d_NOT_ENV_CLOUDS
-        Graphic3d_NOT_ENV_CV
-        Graphic3d_NOT_ENV_MEDIT
-        Graphic3d_NOT_ENV_PEARL
-        Graphic3d_NOT_ENV_SKY1
-        Graphic3d_NOT_ENV_SKY2
-        Graphic3d_NOT_ENV_LINES
-        Graphic3d_NOT_ENV_ROAD
-        Graphic3d_NOT_ENV_UNKNOWN
-        """
-        texture_env = Graphic3d_TextureEnv(name_of_texture)
-        self.View.SetTextureEnv(texture_env)
-        self.View.Redraw()
-
-    def DisableTextureEnv(self):
-        a_null_texture = Handle_Graphic3d_TextureEnv_Create()
-        self.View.SetTextureEnv(a_null_texture)  # Passing null handle to clear the texture data
-        self.View.Redraw()
-
-    def SetRenderingParams(
-        self,
-        Method=Graphic3d_RM_RASTERIZATION,
-        RaytracingDepth=3,
-        IsShadowEnabled=True,
-        IsReflectionEnabled=False,
-        IsAntialiasingEnabled=False,
-        IsTransparentShadowEnabled=False,
-        StereoMode=Graphic3d_StereoMode_QuadBuffer,
-        AnaglyphFilter=Graphic3d_RenderingParams.Anaglyph_RedCyan_Optimized,
-        ToReverseStereo=False,
-    ):
-        """Default values are :
-        Method=Graphic3d_RM_RASTERIZATION,
-        RaytracingDepth=3,
-        IsShadowEnabled=True,
-        IsReflectionEnabled=False,
-        IsAntialiasingEnabled=False,
-        IsTransparentShadowEnabled=False,
-        StereoMode=Graphic3d_StereoMode_QuadBuffer,
-        AnaglyphFilter=Graphic3d_RenderingParams.Anaglyph_RedCyan_Optimized,
-        ToReverseStereo=False)
-        """
-        self.ChangeRenderingParams(
-            Method,
-            RaytracingDepth,
-            IsShadowEnabled,
-            IsReflectionEnabled,
-            IsAntialiasingEnabled,
-            IsTransparentShadowEnabled,
-            StereoMode,
-            AnaglyphFilter,
-            ToReverseStereo,
+        # dict mapping keys to functions
+        self._key_map = {
+            # ord("A"): self.viewer3d.EnableAntiAliasing,  # 开启抗锯齿
+            # ord("B"): self.viewer3d.DisableAntiAliasing,  # 关闭抗锯齿
+            ord("F"): self.viewer3d.FitAll,  # 适应窗口
+            ord("G"): self.viewer3d.change_selection_mode,  # 设置选择模式
+            ord("H"): self.viewer3d.SetModeHLR,  # 隐藏线模式
+            ord("S"): self.viewer3d.SetModeShaded,  # 实体模式
+            ord("W"): self.viewer3d.SetModeWireFrame,  # 线框模式
+        }
+        self.create_cursors()
+        # 设置选中后展示的颜色
+        self.viewer3d.set_selection_color(1, to_Quantity_Color(self._selection_color))
+        if self._view_trihedron:
+            self.display_view_trihedron()
+        if self._origin_trihedron:
+            self.display_origin_trihedron()
+        if self._view_cube:
+            self.display_view_cube()
+        if self._floor:
+            pass
+        # 设置渐变背景
+        self.viewer3d.View.SetBgGradientColors(
+            to_Quantity_Color(self._bg_gradient_color[0]),
+            to_Quantity_Color(self._bg_gradient_color[1]),
+            self._bg_gradient_color[2],
+            True,
         )
+        # ******************************************************
+        # *TEST
+        # ******************************************************
+        if False:
+            # 开启光追效果
+            self.viewer3d.SetRaytracingMode(depth=1)
+        if True:
+            # 开启光栅化效果
+            self.viewer3d.SetRasterizationMode()
+        if False:
+            # 测试其它显示渲染效果
+            # 设置之后背景色消失了
+            self.viewer3d.ChangeRenderingParams(
+                Method=Graphic3d_RM_RASTERIZATION,  # 使用光栅化渲染方法
+                RaytracingDepth=3,  # 光线追踪深度为 3，控制反射和阴影的级别
+                IsShadowEnabled=True,  # 启用阴影效果
+                IsReflectionEnabled=False,  # 启用反射效果
+                IsAntialiasingEnabled=False,  # 启用抗锯齿效果，使图形边缘更平滑
+                IsTransparentShadowEnabled=False,  # 启用透明阴影效果
+                StereoMode=Graphic3d_StereoMode_QuadBuffer,  # 设置立体立体视图模式为四缓冲立体视图
+                AnaglyphFilter=Graphic3d_RenderingParams.Anaglyph_RedCyan_Optimized,  # 设置立体视图的滤光片类型
+                ToReverseStereo=False,  # 不反转立体视图
+            )
 
-    def SetRasterizationMode(self):
-        """要启用光栅化模式，只需调用 SetRenderingParams 的默认值"""
-        self.SetRenderingParams()
+    # end def
+    """
+    ==============================================================
+    Qt 类方法重写
+    ==============================================================
+    """
 
-    def SetRaytracingMode(self, depth=3):
-        """开启光追模式"""
-        """enables the raytracing mode"""
-        self.SetRenderingParams(
-            Method=Graphic3d_RM_RAYTRACING,
-            RaytracingDepth=depth,
-            IsAntialiasingEnabled=True,
-            IsShadowEnabled=True,
-            IsReflectionEnabled=True,
-            IsTransparentShadowEnabled=True,
-        )
+    def keyPressEvent(self, event):
+        """监听按键，并打印日志"""
+        super().keyPressEvent(event)
+        code = event.key()
+        modifiers = event.modifiers()
+        match (modifiers):
+            case Qt.KeyboardModifier.ShiftModifier:
+                if code in self._shift_key_map:
+                    self._shift_key_map[code]()
+                elif code in range(256):
+                    logger.info(f"按键 Shift + {chr(code)} (key code: {code}) 未绑定")
+                # else:
+                #     logger.info(f"key: code {code} not mapped to any function")
+            case Qt.KeyboardModifier.ControlModifier:
+                if code in self._ctrl_key_map:
+                    self._ctrl_key_map[code]()
+                elif code in range(256):
+                    logger.info(f"按键 Ctrl + {chr(code)} (key code: {code}) 未绑定")
+                # else:
+                #     logger.info(f"key: code {code} not mapped to any function")
+            case Qt.KeyboardModifier.NoModifier:
+                if code in self._key_map:
+                    self._key_map[code]()
+                elif code in range(256):
+                    logger.info(f"按键 {chr(code)} (key code: {code}) 未绑定")
+                else:
+                    logger.info(f"key: code {code} not mapped to any function")
+        # end match
 
-    def ExportToImage(self, image_filename):
-        """保存视图为图片"""
-        self.View.Dump(image_filename)
+    # end def
+    def focusInEvent(self, event):
+        if self._inited:
+            self.viewer3d.Repaint()
 
-    # def display_graduated_trihedron(self):
-    #     a_trihedron_data = Graphic3d_GraduatedTrihedron()
-    #     self.View.GraduatedTrihedronDisplay(a_trihedron_data)
+    # end def
+    def focusOutEvent(self, event):
+        if self._inited:
+            self.viewer3d.Repaint()
 
-    def set_selection_color(self, display_mode: int, color: Quantity_Color):
-        """设置选取颜色"""
-        selection_style = self.Context.SelectionStyle()
-        selection_style.SetDisplayMode(display_mode)
-        selection_style.SetColor(color)
+    # end def
+    def paintEvent(self, event):
+        if not self._inited:
+            self.InitDriver()
 
-    def SetBackgroundImage(self, image_filename, stretch=True):
-        """设置背景图片(jpg, png)"""
-        """displays a background image (jpg, png etc.)"""
-        if not os.path.isfile(image_filename):
-            raise IOError("image file %s not found." % image_filename)
-        if stretch:
-            self.View.SetBackgroundImage(image_filename, Aspect_FM_STRETCH, True)
+        self.viewer3d.Context.UpdateCurrentViewer()
+        #! 不能在此处 FitAll，会导致适应窗口缩放时候出错
+        # self.viewer3d.FitAll()
+
+    # end def
+    def wheelEvent(self, event):
+        modifiers = event.modifiers()
+        """滚轮旋转"""
+        delta = event.angleDelta().y()
+        if delta > 0:
+            zoom_factor = 2.0
+            if modifiers == Qt.KeyboardModifier.ShiftModifier:
+                zoom_factor = 1.1
         else:
-            self.View.SetBackgroundImage(image_filename, Aspect_FM_NONE, True)
+            zoom_factor = 0.5
+            if modifiers == Qt.KeyboardModifier.ShiftModifier:
+                zoom_factor = 0.9
+        # end if
+        self.viewer3d.ZoomFactor(zoom_factor)
 
-    # def DisplayVector(self, vec, pnt, update=False):
-    #     """displays a vector as an arrow"""
-    #     if self._inited:
-    #         aStructure = Graphic3d_Structure(self.structure_manager)
+    # end def
+    @property
+    def cursor(self):
+        return self._current_cursor
 
-    #         pnt_as_vec = gp_Vec(pnt.X(), pnt.Y(), pnt.Z())
-    #         start = pnt_as_vec + vec
-    #         pnt_start = gp_Pnt(start.X(), start.Y(), start.Z())
+    @cursor.setter
+    def cursor(self, value):
+        """在更新的同时更新光标事件"""
+        if not self._current_cursor == value:
+            self._current_cursor = value
+            cursor = self._available_cursors.get(value)
 
-    #         Prs3d_Arrow.Draw(
-    #             aStructure.CurrentGroup(),
-    #             pnt_start,
-    #             gp_Dir(vec),
-    #             math.radians(20),
-    #             vec.Magnitude(),
-    #         )
-    #         aStructure.Display()
-    #         # it would be more coherent if a AIS_InteractiveObject
-    #         # would be returned
-    #         if update:
-    #             self.Repaint()
-    #         return aStructure
+            if cursor:
+                self.qApp.setOverrideCursor(cursor)
+            else:
+                self.qApp.restoreOverrideCursor()
+            # end if
+        # end if
 
-    # def DisplayMessage(
-    #     self,
-    #     point: gp_Pnt,
-    #     text: str,
-    #     font_style="SimSun",
-    #     font_height=14.0,
-    #     text_color=(0.0, 0.0, 0.0),
-    #     update=False,
-    # ):
-    #     """在 point 位置显示文字
+    # end property
+    def mousePressEvent(self, event):
+        """鼠标点击响应"""
+        self.setFocus()
+        self.drag_start_position_x = event.position().toPoint().x()
+        self.drag_start_position_y = event.position().toPoint().y()
+        #! 必须加，否则旋转有迟滞
+        self.viewer3d.StartRotation(event.position().toPoint().x(), event.position().toPoint().y())
 
-    #     Parameters
-    #     ----------
-    #     point : gp_Pnt
-    #         要显示的位置
-    #     text : str
-    #         要显示的文字
-    #     font_style : str, optional
-    #         字体，by default "SimSun"
-    #     font_height : float, optional
-    #         文字高度，by default 14.0
-    #     text_color : tuple, optional
-    #         文字颜色，by default (0.0, 0.0, 0.0)
-    #     update : bool, optional
-    #         是否更新，by default False
-    #     """
-    #     aStructure = Graphic3d_Structure(self._structure_manager)
+    # end def
+    def mouseMoveEvent(self, event):
+        """鼠标移动响应"""
+        pt = event.position().toPoint()
+        buttons = event.buttons()
+        modifiers = event.modifiers()
+        match (buttons, modifiers):
+            case (Qt.MouseButton.MiddleButton, Qt.KeyboardModifier.NoModifier):
+                # 旋转
+                # ROTATE
+                self.cursor = "rotate"
+                self.viewer3d.Rotation(pt.x(), pt.y())
+                self._draw_box = []
+            case (Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier):
+                # 区域选择
+                # SELECT AREA
+                # todo 未完成
+                self._select_area = True
+                self._calculate_draw_box(event)
+                # self.update()
+            case (Qt.MouseButton.MiddleButton, Qt.KeyboardModifier.ControlModifier):
+                # 平移
+                # PAN
+                dx = pt.x() - self.drag_start_position_x
+                dy = pt.y() - self.drag_start_position_y
+                self.drag_start_position_x = pt.x()
+                self.drag_start_position_y = pt.y()
+                self.cursor = "pan"
+                self.viewer3d.Pan(dx, -dy)
+                self._draw_box = []
+            case (Qt.MouseButton.RightButton, Qt.KeyboardModifier.ShiftModifier):
+                # 局部放大
+                # ZOOM WINDOW
+                self._zoom_area = True
+                self.cursor = "zoom-area"
+                self._calculate_draw_box(event)
+                # self.update()
+            case _:
+                self._draw_box = []
+                self.viewer3d.MoveTo(pt.x(), pt.y())
+                self.cursor = "arrow"
+        # 动态缩放
+        # DYNAMIC ZOOM
+        #! 暂时移除
+        # elif buttons == Qt.RightButton and not modifiers == Qt.ShiftModifier:
+        #     self.cursor = "zoom"
+        #     self.viewer3d.Repaint()
+        #     self.viewer3d.DynamicZoom(
+        #         abs(self.dragStartPosX),
+        #         abs(self.dragStartPosY),
+        #         abs(pt.x()),
+        #         abs(pt.y()),
+        #     )
+        #     self.dragStartPosX = pt.x()
+        #     self.dragStartPosY = pt.y()
+        #     self._draw_box = []
 
-    #     text_aspect = Prs3d_TextAspect()
-    #     text_aspect.SetColor(getColor(*text_color))
-    #     text_aspect.SetFont(font_style)
-    #     text_aspect.SetHeight(font_height)
-    #     if isinstance(point, gp_Pnt2d):
-    #         point = gp_Pnt(point.X(), point.Y(), 0)
+    # end def
+    def mouseReleaseEvent(self, event):
+        if self._rubber_band:
+            self._rubber_band.hide()  # 删除选择框
+        position = event.position().toPoint()
+        button = event.button()
+        buttons = event.buttons()  # 允许组合按键（左键 + 右键）
+        modifier = event.modifiers()
+        match button:
+            case Qt.MouseButton.LeftButton:
+                if self._select_area and self._draw_box and self.enable_multiply_select:
+                    # 区域框选
+                    [start_x, start_y, dx, dy] = self._draw_box
+                    self.viewer3d.SelectArea(start_x, start_y, start_x + dx, start_y + dy)
+                    self._select_area = False
+                    self.update()
+                    # ! 取消回调，不在该类中处理业务逻辑，利用 qt 信号进行逻辑处理，只传出 ais 对象列表
+                    if self.viewer3d.selected_AISs:
+                        self.signal_AISs_selected.emit(self.viewer3d.selected_AISs)
+                else:
+                    match modifier:
+                        case Qt.KeyboardModifier.ControlModifier:
+                            # 摁住 CTRL 多选
+                            if self.enable_multiply_select:
+                                self.viewer3d.ShiftSelect(position.x(), position.y())
+                        case _:
+                            # 单选
+                            self.viewer3d.Select(position.x(), position.y())
+                    # ! 取消回调，不在该类中处理业务逻辑，利用 qt 信号进行逻辑处理，只传出 ais 对象列表
+                    if self.viewer3d.selected_AISs:
+                        self.signal_AISs_selected.emit(self.viewer3d.selected_AISs)
+                    # end match
+                # end if
+            case Qt.MouseButton.RightButton:
+                if self._zoom_area and self._draw_box:
+                    [start_x, start_y, dx, dy] = self._draw_box
+                    self.viewer3d.ZoomArea(start_x, start_y, start_x + dx, start_y + dy)
+                    self._zoom_area = False
+                    self.update()
+            case _:
+                pass
+        # end match
+        self._draw_box = []
+        self.cursor = "arrow"
 
-    #     Prs3d_Text.Draw(aStructure.CurrentGroup(), text_aspect, to_string(text), point)
-    #     aStructure.Display()
-    #     # @TODO: it would be more coherent if a AIS_InteractiveObject
-    #     # is be returned
-    #     if update:
-    #         self.Repaint()
-    #     return aStructure
+    # end def
+    """
+    ==============================================================
+    自定义方法
+    ==============================================================
+    """
 
-    def DisplayMessage(
-        self,
-        text: str,
-        pnt: gp_Pnt = gp_Pnt(0, 0, 0),
-        font_style="SimSun",
-        font_height=14.0,
-        text_color=(0.0, 0.0, 0.0),
-        update=False,
-    ):
-        """在指定位置显示文字 (基准为文字左下角，文字始终平行于屏幕)
+    def _calculate_draw_box(self, event: QtGui.QMouseEvent, tolerance=2):
+        """计算框选范围
 
         Parameters
         ----------
-        text : str
-            需要显示的文字
-        pnt : gp_Pnt, optional
-            文字的位置，by default gp_Pnt(0, 0, 0)
-        font_style : str, optional
-            字体，by default "SimSun"
-        font_height : float, optional
-            文字高度，by default 14.0
-        text_color : tuple, optional
-            字体颜色，by default (0.0, 0.0, 0.0)
-        update : bool, optional
-            是否立即更新，by default False
+        `event` : QtGui.QMouseEvent
+            _description_
+        `tolerance` : int, optional
+            最小的框大小，by default 2
 
         Returns
         -------
-        AIS_TextLabel
-            AIS 文字对象
+        `_draw_box`:list[x,y,dx,dy]
+            起始点`x`, `y`和框的长宽`dx`, `dy`
         """
-        # 创建一个 AIS_TextLabel 对象
-        text_label = AIS_TextLabel()
-        text_collection = TCollection_ExtendedString(text, True)  # 文字容器
-        text_label.SetText(text_collection)
-        text_label.SetFont(font_style)
-        text_label.SetHeight(font_height)
-        text_label.SetColor(getColor(*text_color))
-        text_translate = gp_Trsf()
-        text_translate.SetTranslation(gp_Vec(gp_Pnt(), pnt))
-        text_label.SetLocalTransformation(text_translate)
-        self.Context.Display(text_label, update)
-        return text_label
+        point = event.position().toPoint()
+        dx = point.x() - self.drag_start_position_x
+        dy = point.y() - self.drag_start_position_y
+        if abs(dx) <= tolerance and abs(dy) <= tolerance:
+            return None
+        self._draw_box = [self.drag_start_position_x, self.drag_start_position_y, dx, dy]
+        # todo 绘制选择框
+        self.drawRubberBand(self.drag_start_position_x, self.drag_start_position_y, point.x(), point.y())
 
-    # def DisplayShape(
-    #     self,
-    #     shapes,
-    #     material=None,
-    #     texture=None,
-    #     color=None,
-    #     transparency=None,
-    #     update=False,
-    # ):
-    #     """display one or a set of displayable objects"""
-    #     ais_shapes = []  # the list of all displayed shapes
+    # end def
+    def drawRubberBand(self, minX, minY, maxX, maxY):
+        aRect = QRect()
 
-    #     if issubclass(shapes.__class__, gp_Pnt):
-    #         # if a gp_Pnt is passed, first convert to vertex
-    #         vertex = BRepBuilderAPI_MakeVertex(shapes)
-    #         shapes = [vertex.Shape()]
-    #     elif isinstance(shapes, gp_Pnt2d):
-    #         vertex = BRepBuilderAPI_MakeVertex(gp_Pnt(shapes.X(), shapes.Y(), 0))
-    #         shapes = [vertex.Shape()]
-    #     elif isinstance(shapes, Geom_Surface):
-    #         bounds = True
-    #         toldegen = 1e-6
-    #         face = BRepBuilderAPI_MakeFace()
-    #         face.Init(shapes, bounds, toldegen)
-    #         face.Build()
-    #         shapes = [face.Shape()]
-    #     elif isinstance(shapes, Geom_Curve):
-    #         edge = BRepBuilderAPI_MakeEdge(shapes)
-    #         shapes = [edge.Shape()]
-    #     elif isinstance(shapes, Geom2d_Curve):
-    #         edge2d = BRepBuilderAPI_MakeEdge2d(shapes)
-    #         shapes = [edge2d.Shape()]
-    #     # if only one shapes, create a list with a single shape
-    #     if not isinstance(shapes, list):
-    #         shapes = [shapes]
-    #     # build AIS_Shapes list
-    #     for shape in shapes:
-    #         if material or texture:
-    #             if texture:
-    #                 shape_to_display = AIS_TexturedShape(shape)
-    #                 (
-    #                     filename,
-    #                     toScaleU,
-    #                     toScaleV,
-    #                     toRepeatU,
-    #                     toRepeatV,
-    #                     originU,
-    #                     originV,
-    #                 ) = texture.GetProperties()
-    #                 shape_to_display.SetTextureFileName(TCollection_AsciiString(filename))
-    #                 shape_to_display.SetTextureMapOn()
-    #                 shape_to_display.SetTextureScale(True, toScaleU, toScaleV)
-    #                 shape_to_display.SetTextureRepeat(True, toRepeatU, toRepeatV)
-    #                 shape_to_display.SetTextureOrigin(True, originU, originV)
-    #                 shape_to_display.SetDisplayMode(3)
-    #             elif material:
-    #                 shape_to_display = AIS_Shape(shape)
-    #                 if isinstance(material, Graphic3d_NameOfMaterial):
-    #                     shape_to_display.SetMaterial(Graphic3d_MaterialAspect(material))
-    #                 else:
-    #                     shape_to_display.SetMaterial(material)
-    #         else:
-    #             # TODO: can we use .Set to attach all TopoDS_Shapes
-    #             # to this AIS_Shape instance?
-    #             shape_to_display = AIS_Shape(shape)
+        # Set the rectangle correctly.
+        aRect.setX(minX) if minX < maxX else aRect.setX(maxX)
+        aRect.setY(minY) if minY < maxY else aRect.setY(maxY)
 
-    #         ais_shapes.append(shape_to_display)
+        aRect.setWidth(abs(maxX - minX))
+        aRect.setHeight(abs(maxY - minY))
 
-    #     # if not SOLO:
-    #     #     # computing graphic properties is expensive
-    #     #     # if an iterable is found, so cluster all TopoDS_Shape under
-    #     #     # an AIS_MultipleConnectedInteractive
-    #     #     #shape_to_display = AIS_MultipleConnectedInteractive()
-    #     #     for ais_shp in ais_shapes:
-    #     #         # TODO : following line crashes with oce-0.18
-    #     #         # why ? fix ?
-    #     #         #shape_to_display.Connect(i)
-    #     #         self.Context.Display(ais_shp, False)
-    #     # set the graphic properties
-    #     if material is None:
-    #         # The default material is too shiny to show the object
-    #         # color well, so I set it to something less reflective
-    #         for shape_to_display in ais_shapes:
-    #             shape_to_display.SetMaterial(Graphic3d_MaterialAspect(Graphic3d_NOM_NEON_GNC))
-    #     if color:
-    #         if isinstance(color, str):
-    #             color = get_color_from_name(color)
-    #         elif isinstance(color, int):
-    #             color = Quantity_Color(color)
-    #         for shp in ais_shapes:
-    #             self.Context.SetColor(shp, color, False)
-    #     if transparency:
-    #         for shape_to_display in ais_shapes:
-    #             shape_to_display.SetTransparency(transparency)
-    #     # display the shapes
-    #     for shape_to_display in ais_shapes:
-    #         self.Context.Display(shape_to_display, False)
-    #     if update:
-    #         # especially this call takes up a lot of time...
-    #         self.FitAll()
-    #         self.Repaint()
+        if not self._rubber_band:
+            self._rubber_band = QRubberBand(QRubberBand.Rectangle, self)
+            # setStyle is important, set to windows style will just draw rectangle frame, otherwise will draw a solid rectangle.
+            self._rubber_band.setStyle(QStyleFactory.create("windows"))
+            # print(QStyleFactory.keys())
+            # self._rubber_band.setStyle(QStyleFactory.create("Fusion"))
+        self._rubber_band.setGeometry(aRect)
+        self._rubber_band.show()
 
-    #     return ais_shapes
+    # end def
+    def create_cursors(self):
+        """设置鼠标光标"""
+        self._available_cursors = {
+            "arrow": QtGui.QCursor(Qt.CursorShape.ArrowCursor),  # default
+            "pan": QtGui.QCursor(Qt.CursorShape.SizeAllCursor),  # 平移
+            "rotate": QtGui.QCursor(Qt.CursorShape.CrossCursor),  # 旋转
+            "zoom": QtGui.QCursor(Qt.CursorShape.SizeVerCursor),  # 缩放
+            "zoom-area": QtGui.QCursor(Qt.CursorShape.SizeVerCursor),  # 局部缩放
+        }
 
-    # def DisplayColoredShape(
-    #     self,
-    #     shapes,
-    #     color="YELLOW",
-    #     update=False,
-    # ):
-    #     if isinstance(color, str):
-    #         dict_color = {
-    #             "WHITE": Quantity_NOC_WHITE,
-    #             "BLUE": Quantity_NOC_BLUE1,
-    #             "RED": Quantity_NOC_RED,
-    #             "GREEN": Quantity_NOC_GREEN,
-    #             "YELLOW": Quantity_NOC_YELLOW,
-    #             "CYAN": Quantity_NOC_CYAN1,
-    #             "BLACK": Quantity_NOC_BLACK,
-    #             "ORANGE": Quantity_NOC_ORANGE,
-    #         }
-    #         clr = dict_color[color]
-    #     elif isinstance(color, Quantity_Color):
-    #         clr = color
-    #     else:
-    #         raise ValueError('color should either be a string ( "BLUE" ) or a Quantity_Color(0.1, 0.8, 0.1) got %s' % color)
+        self._current_cursor = "arrow"
 
-    #     return self.DisplayShape(shapes, color=clr, update=update)
+    # end def
+    def display_view_trihedron(self):
+        """显示视图坐标轴"""
+        a_origin_trihedron = create_trihedron(arrow_length=50)
+        a_origin_trihedron.SetTransformPersistence(
+            Graphic3d_TransformPers(
+                (Graphic3d_TransModeFlags.Graphic3d_TMF_TriedronPers),
+                Aspect_TypeOfTriedronPosition.Aspect_TOTP_RIGHT_LOWER,
+                Graphic3d_Vec2i(80, 50),
+            )
+        )
+        self.viewer3d.Context.Display(a_origin_trihedron, False)
 
-    def EnableAntiAliasing(self, level=4):
-        """抗锯齿
+    # end def
+    def display_view_cube(self):
+        """显示视图立方体"""
+        a_view_cube = create_view_cube()
+        # 显示视图立方体
+        self.viewer3d.Context.Display(a_view_cube, False)
 
-        Parameters
-        ----------
-        `level` : int, optional
-            默认抗锯齿级别, by default 4
-        """
-        self.SetNbMsaaSample(level)
-
-    def DisableAntiAliasing(self):
-        self.SetNbMsaaSample(0)
+    # end def
+    def display_origin_trihedron(self, arrow_length=1000, arrow_width=5):
+        """显示原点坐标轴"""
+        a_origin_trihedron = create_trihedron(arrow_length=arrow_length, arrow_width=arrow_width)
+        self.viewer3d.Context.Display(a_origin_trihedron, False)
 
     def EraseAll(self):
-        self.Context.EraseAll(True)
-
-    # def Tumble(self, num_images, animation=True):
-    #     self.View.Tumble(num_images, animation)
-
-    def change_selection_mode(self):
-        """按照预设顺序依次切换下一个选择模式"""
-        self._current_selection_mode = next(self.selection_modes)
-        self.set_selection_mode()
-
-    # end def
-    def set_selection_mode(self, mode: TopAbs_ShapeEnum | str = None):
-        """设置选择模式
-
-        Parameters
-        ----------
-        `mode` : TopAbs_ShapeEnum | str, 可选
-            选择模式，不输入则不改变当前选择模式, 默认值: None
-        """
-        self.Context.Deactivate()
-        if mode:
-            if isinstance(mode, str):
-                match (mode):
-                    case ("face"):
-                        mode = TopAbs_ShapeEnum.TopAbs_FACE
-                    case ("point"):
-                        mode = TopAbs_ShapeEnum.TopAbs_VERTEX
-                    case ("edge"):
-                        mode = TopAbs_ShapeEnum.TopAbs_EDGE
-                    case ("shell"):
-                        mode = TopAbs_ShapeEnum.TopAbs_SHELL
-                    case ("solid"):
-                        mode = TopAbs_ShapeEnum.TopAbs_SOLID
-                    case ("shape"):
-                        mode = TopAbs_ShapeEnum.TopAbs_SHAPE
-                    case (_):
-                        mode = TopAbs_ShapeEnum.TopAbs_SHAPE
-                # end match
-            elif isinstance(mode, TopAbs_ShapeEnum):
-                pass
-            self.Context.Activate(AIS_Shape.SelectionMode(mode), True)
-        else:
-            self.Context.Activate(AIS_Shape.SelectionMode(self._current_selection_mode), True)
-        self.Context.UpdateSelected(True)
+        self.viewer3d.EraseAll()
+        if self._view_trihedron:
+            self.display_view_trihedron()
+        if self._origin_trihedron:
+            self.display_origin_trihedron()
+        if self._view_cube:
+            self.display_view_cube()
+        self.context.UpdateCurrentViewer()
 
     # end def
-    def set_selection_mode_point(self):
-        """选择点"""
-        self.set_selection_mode(TopAbs_VERTEX)
+    def display_graduated_trihedron(self):
+        """显示带刻度的立方体"""
+        a_trihedron_data = Graphic3d_GraduatedTrihedron()
+        self.viewer3d.View.GraduatedTrihedronDisplay(a_trihedron_data)
 
-    def set_selection_mode_edge(self):
-        """选择边"""
-        self.set_selection_mode(TopAbs_EDGE)
+    # end def
 
-    def set_selection_mode_face(self):
-        """选择面"""
-        self.set_selection_mode(TopAbs_FACE)
 
-    def set_selection_mode_shell(self):
-        """选择壳"""
-        self.set_selection_mode(TopAbs_SHELL)
+# end class
+# class qtViewer3dWidgetWithManipulator(qtViewer3dWidget):
+#     def __init__(self):
+#         super().__init__(
+#             self,
+#             bg_color_aspect=((37, 55, 113), (36, 151, 132), Aspect_GradientFillMethod.Aspect_GradientFillMethod_Vertical),
+#             selection_color=(13, 141, 255),
+#         )
+#         self.manipulator=AIS_Manipulator()
 
-    def set_selection_mode_shape(self):
-        """选择体"""
-        self.set_selection_mode(TopAbs_SOLID)
+#     # end default constructor
+#     def mousePressEvent(self, event):
+#         super().mousePressEvent(event)
+#         pt = event.position().toPoint()
+#         if self.manipulator.HasActiveMode():
+#             self.manipulator.StartTransform(pt.x(),pt.y(),self.viewer3d.View)
+#     # end def
 
-    def GetSelectedAISShapes(self):
-        return self.selected_AISs
+# # end class
+if __name__ == "__main__":
+    app = QApplication([])
+    ex = qtViewer3dWidget()
+    ex.show()
+    app.exec()
 
-    def GetSelectedAISShape(self):
-        return self.Context.SelectedInteractive()
-
-    def SelectArea(self, Xmin, Ymin, Xmax, Ymax):
-        """区域框选"""
-        self.Context.Select(Xmin, Ymin, Xmax, Ymax, self.View, True)
-        self.Context.InitSelected()
-        # reinit the selected_shapes list
-        self.selected_AISs = []
-        while self.Context.MoreSelected():
-            if self.Context.HasSelectedShape():
-                self.selected_AISs.append(self.Context.SelectedInteractive())
-            self.Context.NextSelected()
-        # callbacks
-        for callback in self._select_area_callbacks:
-            callback(self.selected_AISs, Xmin, Ymin, Xmax, Ymax)
-
+    # end main
     def Select(self, X, Y):
         """选择之后执行回调函数"""
         self.Context.Select(True)
@@ -770,7 +571,7 @@ class myViewer3d(Display3d):
             if self.Context.HasSelectedShape():
                 self.selected_AISs.append(self.Context.SelectedInteractive())
                 pass
-        # ! 不在该类中处理业务逻辑，利用qt信号进行逻辑处理，只传出ais对象列表
+        # ! 不在该类中处理业务逻辑，利用 qt 信号进行逻辑处理，只传出 ais 对象列表
         # for callback in self._select_callbacks:
         #     callback(self.selected_AISs, X, Y)
 
@@ -786,7 +587,7 @@ class myViewer3d(Display3d):
             self.Context.NextSelected()
         # 更新选中内容的高亮状态
         self.Context.UpdateSelected(True)
-        # ! 不在该类中处理业务逻辑，利用qt信号进行逻辑处理，只传出ais对象列表
+        # ! 不在该类中处理业务逻辑，利用 qt 信号进行逻辑处理，只传出 ais 对象列表
         # for callback in self._select_callbacks:
         #     callback(self.selected_AISs, X, Y)
 
@@ -798,7 +599,7 @@ class myViewer3d(Display3d):
         self.View.StartRotation(X, Y)
 
     def Rotation(self, X, Y):
-        # 旋转前必须调用StartRotation
+        # 旋转前必须调用 StartRotation
         self.View.Rotation(X, Y)
 
     def DynamicZoom(self, X1, Y1, X2, Y2):

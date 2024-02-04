@@ -1,15 +1,22 @@
-import math
-import os
-import sys
+"""
+创建箭头
+Author: ICO
+Date: 2024-02-04"""
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../")
+import math
+
+# logger
+from loguru import logger
+
+# pyOCC
 from OCC.Core.AIS import AIS_MultipleConnectedInteractive, AIS_Shape
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeCone, BRepPrimAPI_MakeCylinder
 from OCC.Core.gp import gp_Ax2, gp_Dir, gp_Pnt, gp_Vec
 from OCC.Core.Quantity import Quantity_Color
 from OCC.Display.SimpleGui import init_display
 
-from pyOCC.getColor import getColor
+# local
+from dataExchange import to_Quantity_Color
 
 
 class AIS_Arrow(AIS_MultipleConnectedInteractive):
@@ -17,15 +24,15 @@ class AIS_Arrow(AIS_MultipleConnectedInteractive):
         self,
         pnt: gp_Pnt,
         dir: gp_Dir,
-        length=100,
-        size=1,
-        arrow_angle=20,
+        length=100.0,
+        calibre=1.0,
+        arrow_angle=20.0,
         cone_scale=1.5,
         arrow_color: tuple[int, int, int] = (255, 0, 0),
     ):
         super().__init__()
         # 将输入参数存储为对象属性
-        self.r_size = size / 2
+        self.r_size = calibre / 2
         self.arrow_angle = arrow_angle
         self.start_point = pnt
         self.direction = dir
@@ -33,12 +40,12 @@ class AIS_Arrow(AIS_MultipleConnectedInteractive):
         self.arrow_length = length
         self.arrow_high = self.bottom_radius / math.tan(math.radians(self.arrow_angle))
         self.cone_start = pnt.Translated(gp_Vec(dir).Scaled(self.arrow_length - self.arrow_high))
-        self.arrow_color = getColor(arrow_color)
+        self.arrow_color = to_Quantity_Color(arrow_color)
         # 创建锥体和圆柱体
         self._makeCone()
         self._makeCylinder()
         # 设置颜色
-        self.SetColor(getColor(arrow_color))
+        self.SetColor(to_Quantity_Color(arrow_color))
         # 连接锥体和圆柱体
         self.Connect(self.cone)
         self.Connect(self.cylinder)
@@ -67,11 +74,13 @@ class AIS_Arrow(AIS_MultipleConnectedInteractive):
     # end def
 
 
-if __name__ == "__main__":
-    display, start_display, add_menu, add_function_to_menu = init_display(size=(1920, 980), display_triedron=True)
-
-    aarow = AIS_Arrow(gp_Pnt(*(0, 0, 0)), gp_Dir(*(1, 0, 0)))
-    display.Context.Display(aarow, True)
-    display.FitAll()
-    start_display()
-# end main
+def create_ais_arrow(
+    pnt=[0, 0, 0],
+    dir=[1, 0, 0],
+    length=100.0,
+    calibre=1.0,
+    arrow_angle: float = 20.0,
+    cone_scale: float = 1.5,
+    arrow_color: tuple[int, int, int] = (255, 0, 0),
+):
+    return AIS_Arrow(gp_Pnt(*pnt), gp_Dir(*dir), length, calibre, arrow_angle, cone_scale, arrow_color)

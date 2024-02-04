@@ -1,6 +1,7 @@
 """
 QT & OCC 三维显示窗口
 """
+
 from loguru import logger
 
 # local
@@ -168,7 +169,7 @@ class qtViewer3dWidget(qtBaseViewerWidget):
         # 设置显示实体
         self.viewer3d.SetModeShaded()
         # 开启抗锯齿
-        self.viewer3d.EnableAntiAliasing()
+        self.viewer3d.enable_anti_aliasing()
         self._inited = True
         # dict mapping keys to functions
         self._key_map = {
@@ -232,21 +233,21 @@ class qtViewer3dWidget(qtBaseViewerWidget):
         code = event.key()
         modifiers = event.modifiers()
         match (modifiers):
-            case (Qt.KeyboardModifier.ShiftModifier):
+            case Qt.KeyboardModifier.ShiftModifier:
                 if code in self._shift_key_map:
                     self._shift_key_map[code]()
                 elif code in range(256):
                     logger.info(f"按键 Shift + {chr(code)} (key code: {code}) 未绑定")
                 # else:
                 #     logger.info(f"key: code {code} not mapped to any function")
-            case (Qt.KeyboardModifier.ControlModifier):
+            case Qt.KeyboardModifier.ControlModifier:
                 if code in self._ctrl_key_map:
                     self._ctrl_key_map[code]()
                 elif code in range(256):
                     logger.info(f"按键 Ctrl + {chr(code)} (key code: {code}) 未绑定")
                 # else:
                 #     logger.info(f"key: code {code} not mapped to any function")
-            case (Qt.KeyboardModifier.NoModifier):
+            case Qt.KeyboardModifier.NoModifier:
                 if code in self._key_map:
                     self._key_map[code]()
                 elif code in range(256):
@@ -384,7 +385,7 @@ class qtViewer3dWidget(qtBaseViewerWidget):
         buttons = event.buttons()  # 允许组合按键（左键 + 右键）
         modifier = event.modifiers()
         match button:
-            case (Qt.MouseButton.LeftButton):
+            case Qt.MouseButton.LeftButton:
                 if self._select_area and self._draw_box and self.enable_multiply_select:
                     # 区域框选
                     [start_x, start_y, dx, dy] = self._draw_box
@@ -396,7 +397,7 @@ class qtViewer3dWidget(qtBaseViewerWidget):
                         self.signal_AISs_selected.emit(self.viewer3d.selected_AISs)
                 else:
                     match modifier:
-                        case (Qt.KeyboardModifier.ControlModifier):
+                        case Qt.KeyboardModifier.ControlModifier:
                             # 摁住 CTRL 多选
                             if self.enable_multiply_select:
                                 self.viewer3d.ShiftSelect(position.x(), position.y())
@@ -408,7 +409,7 @@ class qtViewer3dWidget(qtBaseViewerWidget):
                         self.signal_AISs_selected.emit(self.viewer3d.selected_AISs)
                     # end match
                 # end if
-            case (Qt.MouseButton.RightButton):
+            case Qt.MouseButton.RightButton:
                 if self._zoom_area and self._draw_box:
                     [start_x, start_y, dx, dy] = self._draw_box
                     self.viewer3d.ZoomArea(start_x, start_y, start_x + dx, start_y + dy)

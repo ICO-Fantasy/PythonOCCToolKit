@@ -1,11 +1,21 @@
 """
-获取点的坐标
+gp_Pnt 的数据交换
 Author: ICO
 Date: 2024-01-21"""
+
+import numpy as np
+
+# logger
+from loguru import logger
+
+# pyOCC
 from OCC.Core.gp import gp_Pnt
 
+# local
+from geometricTyping import Point
 
-def get_point(pnt: gp_Pnt):
+
+def get_point(pnt: gp_Pnt) -> Point:
     """获取 gp_Pnt 的三坐标
 
     Parameters
@@ -18,7 +28,7 @@ def get_point(pnt: gp_Pnt):
     tuple[float, float, float]
         返回点的元组
     """
-    return (pnt.X(), pnt.Y(), pnt.Z())
+    return np.matrix([[pnt.X(), pnt.Y(), pnt.Z()]])
 
 
 # end def
