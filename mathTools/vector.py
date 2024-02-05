@@ -2,13 +2,14 @@
 向量有关计算
 Author: ICO
 Date: 2023-09-11"""
+
 import numpy as np
 import numpy.typing as npt
 
-from geometricTyping import Vector
+from basicGeometricTyping import Vector
 
 
-def angle_between_vectors(vector_1: Vector, vector_2: Vector):
+def angle_between_vectors(start_vector: Vector, end_vector: Vector):
     """计算两向量夹角
 
     Parameters
@@ -23,14 +24,10 @@ def angle_between_vectors(vector_1: Vector, vector_2: Vector):
     float
         两向量夹角，范围在 [0,pi]
     """
-    dotProduct = np.dot(vector_1, vector_2)
-    normVector1 = np.linalg.norm(vector_1)
-    normVector2 = np.linalg.norm(vector_2)
 
-    cosTheta = dotProduct / (normVector1 * normVector2)
-
+    _cos_theta = np.dot(start_vector, end_vector) / (np.linalg.norm(start_vector) * np.linalg.norm(end_vector))
     # 使用 arccos 函数计算角度（弧度）
-    angle: float = np.arccos(cosTheta)
+    angle: float = np.arccos(_cos_theta)
 
     return angle
 

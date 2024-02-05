@@ -1,3 +1,9 @@
+"""
+常用几何的类型提示
+Author: ICO
+Date: 2024-01-01
+"""
+
 from enum import Enum
 from typing import Annotated, Literal
 
@@ -7,13 +13,13 @@ from numpy.typing import ArrayLike, NDArray
 Vector = Annotated[NDArray[npt.float_], Literal[3,]]
 """
 向量
-通常描述为 [x,y,z]
-齐次空间描述为 [x,y,z,w],其中 w 为向量的长度
+通常描述为 [x,y,z],
+齐次空间描述为 [x,y,z,w], 其中 w 为向量的长度
 """
 Point = Annotated[NDArray[npt.float_], Literal[3,]]
 """
 点
-通常描述为 [x,y,z]
+通常描述为 [x,y,z],
 齐次空间描述为 [x,y,z,0]
 """
 # 平移采用向量描述

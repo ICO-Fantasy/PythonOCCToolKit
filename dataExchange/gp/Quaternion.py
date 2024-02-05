@@ -6,23 +6,21 @@ Date: 2024-02-04"""
 import json
 
 import numpy as np
-
 # logger
 from loguru import logger
-
 # pyOCC
 from OCC.Core.gp import gp_Dir, gp_EulerSequence, gp_Quaternion, gp_Trsf
 
 # local
-from geometricTyping import Quaternion
+from basicGeometricTyping import Quaternion
 
 
-def gp_Quaternion2quat(quat: gp_Quaternion) -> Quaternion:
+def gp_Quaternion_as_quat(quat: gp_Quaternion) -> Quaternion:
     return np.matrix([[quat.X(), quat.Y(), quat.Z(), quat.W()]])
 
 
 # end def
-def gp_Quaternion2euler(quat: gp_Quaternion, sequence="euler"):
+def gp_Quaternion_as_euler(quat: gp_Quaternion, sequence="euler"):
     match sequence:
         case "euler":
             gp_sequence = gp_EulerSequence.gp_EulerAngles

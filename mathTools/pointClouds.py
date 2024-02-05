@@ -3,7 +3,8 @@
 Author: ICO
 Date: 2023-09-11"""
 import numpy as np
-from geometricTyping import Point
+
+from basicGeometricTyping import Point
 
 
 def center_point_of_points(points_list: list[Point]) -> Point:

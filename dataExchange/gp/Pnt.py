@@ -4,18 +4,16 @@ Author: ICO
 Date: 2024-01-21"""
 
 import numpy as np
-
 # logger
 from loguru import logger
-
 # pyOCC
 from OCC.Core.gp import gp_Pnt
 
 # local
-from geometricTyping import Point
+from basicGeometricTyping import Point
 
 
-def get_point(pnt: gp_Pnt) -> Point:
+def from_point(pnt: gp_Pnt) -> Point:
     """获取 gp_Pnt 的三坐标
 
     Parameters

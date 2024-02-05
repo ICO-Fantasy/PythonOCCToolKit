@@ -10,7 +10,7 @@ from loguru import logger
 from OCC.Core.gp import gp_XYZ
 
 
-def get_gp_XYZ(xyz: gp_XYZ):
+def from_gp_XYZ(xyz: gp_XYZ):
     """获取 gp_XYZ 的取值
 
     Parameters

@@ -1,22 +1,23 @@
 """三点定圆
 Author: ICO
 Date: 2023-09-11"""
+
 import numpy as np
 import numpy.typing as npt
 from loguru import logger
 from numpy.linalg import det
 
-from geometricTyping import Vector
+from basicGeometricTyping import Point
 
 from .arc import angle_of_arcs
 
 
 def three_point_fixed_circle(
-    point_1: list[float] | list[list],
-    point_2: list[float] = [0, 0, 0],
-    point_3: list[float] = [0, 0, 0],
+    point_1: Point | list[Point],
+    point_2: Point = np.array[0, 0, 0],
+    point_3: Point = np.array[0, 0, 0],
     linear_tolerance=1e-6,
-) -> tuple[Vector, float, float]:
+) -> tuple[Point, float, float]:
     """
     三点定圆
 
@@ -24,7 +25,8 @@ def three_point_fixed_circle(
     ------
     circle_center, radius, angle
     """
-    if isinstance(point_1[0], tuple):
+    LINEAR_TOLERANCE = linear_tolerance
+    if isinstance(point_1[0], (tuple | list | Point)):
         point_1, point_2, point_3 = point_1
 
     p1 = np.array(point_1)
@@ -46,14 +48,14 @@ def three_point_fixed_circle(
         logger.warning("\t输入坐标的维数不一致")
 
     # 共线检查
-    temp01 = p1 - p2  # type: ignore
-    temp02 = p3 - p2  # type: ignore
+    temp01 = p1 - p2
+    temp02 = p3 - p2
     temp03 = np.cross(temp01, temp02)
     # 计算两个向量（向量数组）的叉乘。叉乘返回的数组既垂直于 a，又垂直于 b。
     # 如果 a,b 是向量数组，则向量在最后一维定义。该维度可以为 2，也可以为 3. 为 2 的时候会自动将第三个分量视作 0 补充进去计算。
     temp = (temp03 @ temp03) / (temp01 @ temp01) / (temp02 @ temp02)  # @装饰器的格式来写的目的就是为了书写简单方便
     # temp03 @ temp03 中的@ 含义是数组中每个元素的平方之和
-    if temp < linear_tolerance:
+    if temp < LINEAR_TOLERANCE:
         logger.warning("\t三点共线，无法确定圆")
 
     temp1 = np.vstack((p1, p2, p3))  # 行拼接
@@ -65,14 +67,14 @@ def three_point_fixed_circle(
     p = +det(np.delete(mat1, 2, axis=1))
     q = -det(temp1)
 
-    temp3 = np.array([p1 @ p1, p2 @ p2, p3 @ p3]).reshape(3, 1)  # type: ignore
+    temp3 = np.array([p1 @ p1, p2 @ p2, p3 @ p3]).reshape(3, 1)
     temp4 = np.hstack((temp3, mat1))
     # 使用 stack，可以将一个列表转换为一个 numpy 数组，当 axis=0 的时候，和 使用 np.array() 没有什么区别，
     # 但是当 axis=1 的时候，那么就是对每一行进行在列方向上进行运算，也就是列方向结合，
     # 此时矩阵的维度也从（2,3）变成了（3,2）
     # hstack(tup) ，参数 tup 可以是元组，列表，或者 numpy 数组，返回结果为 numpy 的数组
     temp5 = np.array([2 * q, -m, -n, -p, 0])
-    mat2 = np.vstack((temp4, temp5))  # size = 4x5
+    mat2 = np.vstack((temp4, temp5))  # size = (4,5)
 
     A = +det(mat2[:, 1:])
     B = -det(np.delete(mat2, 1, axis=1))

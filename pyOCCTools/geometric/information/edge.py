@@ -2,6 +2,7 @@
 获取 TopoDS_Edge 的几何信息
 Author: ICO
 Date: 2024-01-21"""
+
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 from OCC.Core.TopoDS import TopoDS_Edge
 

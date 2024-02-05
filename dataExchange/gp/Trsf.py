@@ -14,13 +14,13 @@ from loguru import logger
 from OCC.Core.gp import gp_Dir, gp_Trsf
 
 # local
-from geometricTyping import Quaternion, TransformMatrix_4x4, Vector
+from basicGeometricTyping import Quaternion, TransformMatrix_4x4, Vector
 
-from .Quaternion import gp_Quaternion2quat
-from .XYZ import get_gp_XYZ
+from .Quaternion import gp_Quaternion_as_quat
+from .XYZ import from_gp_XYZ
 
 
-def gp_Trsf2transform_matrix(trsf: gp_Trsf) -> TransformMatrix_4x4:
+def gp_Trsf_as_transform_matrix(trsf: gp_Trsf) -> TransformMatrix_4x4:
     transform = np.matrix(
         [
             [trsf.Value(1, 1), trsf.Value(1, 2), trsf.Value(1, 3), trsf.Value(1, 4)],
@@ -33,7 +33,7 @@ def gp_Trsf2transform_matrix(trsf: gp_Trsf) -> TransformMatrix_4x4:
 
 
 # end def
-def gp_Trsf2vec_quat(trsf: gp_Trsf) -> tuple[Vector, Quaternion]:
+def gp_Trsf_as_vec_quat(trsf: gp_Trsf) -> tuple[Vector, Quaternion]:
     """从 gp_Trsf 中获取平移变换和旋转四元数
 
     Parameters
@@ -45,10 +45,10 @@ def gp_Trsf2vec_quat(trsf: gp_Trsf) -> tuple[Vector, Quaternion]:
     tuple[Vector, Quaternion]
         平移变换和旋转四元数
     """
-    return get_gp_XYZ(trsf.TranslationPart()), gp_Quaternion2quat(trsf.GetRotation())
+    return from_gp_XYZ(trsf.TranslationPart()), gp_Quaternion_as_quat(trsf.GetRotation())
 
 
-def gp_Trsf2vectors(trsf: gp_Trsf) -> tuple[Vector, Vector, Vector, Vector]:
+def gp_Trsf_as_vectors(trsf: gp_Trsf) -> tuple[Vector, Vector, Vector, Vector]:
     """从 gp_Trsf 中获取平移变换和三个方向向量
 
     Parameters
@@ -62,14 +62,14 @@ def gp_Trsf2vectors(trsf: gp_Trsf) -> tuple[Vector, Vector, Vector, Vector]:
     """
     rotation_matrix = trsf.VectorialPart()
     return (
-        get_gp_XYZ(trsf.TranslationPart()),
-        get_gp_XYZ(rotation_matrix.Column(1)),
-        get_gp_XYZ(rotation_matrix.Column(2)),
-        get_gp_XYZ(rotation_matrix.Column(3)),
+        from_gp_XYZ(trsf.TranslationPart()),
+        from_gp_XYZ(rotation_matrix.Column(1)),
+        from_gp_XYZ(rotation_matrix.Column(2)),
+        from_gp_XYZ(rotation_matrix.Column(3)),
     )
 
 
-def trsf2json(trsf: gp_Trsf):
+def trsf_as_json(trsf: gp_Trsf):
     """
     把 gp_Trsf 转为 json 格式
 

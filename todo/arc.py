@@ -5,7 +5,7 @@ Date: 2023-09-11"""
 import numpy as np
 import numpy.typing as npt
 
-from geometricTyping import Vector
+from basicGeometricTyping import Arc, Vector
 
 from ..mathTools.vector import angle_between_vectors
 
